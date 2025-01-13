@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 
-
+load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ API_URL = "https://pumpportal.fun/api"
 # Store user private keys (in memory - consider using a secure database in production)
 user_wallets = {}
 
-load_dotenv()
+
 # After load_dotenv()
 if not TELEGRAM_BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN environment variable is not set")
@@ -549,10 +549,19 @@ async def main():
         
         # Setup aiohttp application
         app = web.Application()
-
+        
+        # Add routes
         app.router.add_get("/health", health_check)
         
-        # Use setup_application instead of SimpleRequestHandler
+        # Setup webhook handler
+        webhook_requests_handler = SimpleRequestHandler(
+            dispatcher=dp,
+            bot=bot,
+            secret_token=TELEGRAM_BOT_TOKEN  # You can set a secret token here
+        )
+        webhook_requests_handler.register(app, path=WEBHOOK_PATH)
+        
+        # Setup application
         setup_application(app, dp, bot=bot)
         
         # Setup runner
@@ -561,7 +570,16 @@ async def main():
         site = web.TCPSite(runner, host=HOST, port=PORT)
         await site.start()
         
+        # Ensure webhook is set
+        webhook_info = await bot.get_webhook_info()
+        if webhook_info.url != WEBHOOK_URL:
+            await bot.set_webhook(
+                url=WEBHOOK_URL,
+                secret_token=TELEGRAM_BOT_TOKEN  # Same secret token as above
+            )
+        
         logger.info(f"Bot started on port {PORT}")
+        logger.info(f"Webhook URL: {WEBHOOK_URL}")
         
         # Run forever
         await asyncio.Event().wait()
