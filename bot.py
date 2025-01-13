@@ -548,95 +548,48 @@ async def main():
             types.BotCommand(command="createtoken", description="Create a new token: /createtoken"),
             types.BotCommand(command="webhookinfo", description="Get webhook status information"),
         ])
-        
-        # Setup webhook
-        dp.startup.register(on_startup)
-        
+
         # Setup aiohttp application
         app = web.Application()
+
+        # Setup routes
+        app.router.add_get("/health", lambda r: web.Response(text="OK"))
         
-        # Add routes
-        app.router.add_get("/health", health_check)
-        app.router.add_get(WEBHOOK_PATH, webhook_debug)  # Debug endpoint
-        
-        # Generate a secure random string for webhook validation
-        WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', TELEGRAM_BOT_TOKEN)
-        
-        # Setup webhook handler for POST requests
-        webhook_requests_handler = SimpleRequestHandler(
+        # Create webhook handler
+        webhook_handler = SimpleRequestHandler(
             dispatcher=dp,
-            bot=bot
+            bot=bot,
         )
-        webhook_requests_handler.register(app, path=WEBHOOK_PATH)
         
-        # Add error middleware
-        @web.middleware
-        async def error_middleware(request, handler):
-            try:
-                # Log incoming request details
-                logger.info(f"Incoming request: {request.method} {request.path}")
-                logger.info(f"Headers: {dict(request.headers)}")
-                
-                if request.method == "POST" and request.path == WEBHOOK_PATH:
-                    try:
-                        body = await request.text()
-                        logger.info(f"Request body: {body[:200]}...")  # Log first 200 chars of body
-                    except Exception as e:
-                        logger.error(f"Error reading request body: {e}")
-                
-                response = await handler(request)
-                
-                # Log response details
-                logger.info(f"Response status: {response.status}")
-                return response
-                
-            except web.HTTPException as ex:
-                if ex.status == 405:
-                    return web.Response(
-                        text="Method not allowed. POST is required for webhook requests.",
-                        status=405
-                    )
-                logger.error(f"HTTP Exception: {ex}")
-                raise
-            except Exception as e:
-                logger.error(f"Request error: {str(e)}")
-                return web.Response(
-                    text="Internal server error",
-                    status=500
-                )
-        
-        app.middlewares.append(error_middleware)
+        # Register webhook handler
+        webhook_handler.register(app, path=WEBHOOK_PATH)
         
         # Setup application
         setup_application(app, dp, bot=bot)
         
-        # Setup runner
+        # Set webhook
+        await bot.delete_webhook()  # Clear any existing webhook
+        await bot.set_webhook(
+            url=WEBHOOK_URL,
+            allowed_updates=['message', 'callback_query'],
+            drop_pending_updates=True
+        )
+        
+        logger.info(f"Setting webhook URL to {WEBHOOK_URL}")
+        
+        # Start web server
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, host=HOST, port=PORT)
+        site = web.TCPSite(runner, HOST, PORT)
         await site.start()
         
-        # Ensure webhook is set
+        logger.info(f"Bot started on {HOST}:{PORT}")
+        
+        # Log webhook info
         webhook_info = await bot.get_webhook_info()
-        if webhook_info.url != WEBHOOK_URL:
-            logger.info(f"Setting webhook URL to {WEBHOOK_URL}")
-            await bot.set_webhook(
-                url=WEBHOOK_URL,
-                drop_pending_updates=True,  # Optional: drop any pending updates
-                allowed_updates=['message', 'callback_query']  # Specify which updates you want to receive
-            )
-            logger.info("Webhook set successfully")
-        else:
-            logger.info("Webhook URL already correct")
-            
-        logger.info(f"Bot started on port {PORT}")
-        logger.info(f"Webhook URL: {WEBHOOK_URL}")
+        logger.info(f"Current webhook info: {webhook_info}")
         
-        # Log current webhook info
-        current_webhook = await bot.get_webhook_info()
-        logger.info(f"Current webhook info: {current_webhook}")
-        
-        # Run forever
+        # Keep the server running
         await asyncio.Event().wait()
         
     except Exception as e:
