@@ -34,6 +34,8 @@ WEBHOOK_HOST = os.getenv('WEBHOOK_HOST')
 WEBHOOK_PATH = '/webhook'
 WEBHOOK_URL = f'https://{WEBHOOK_HOST}{WEBHOOK_PATH}'
 PORT = int(os.getenv('PORT', 10000))
+HOST = '0.0.0.0'  # Important for Render
+
 
 
 # Bot Configuration
@@ -556,7 +558,7 @@ async def main():
         # Setup runner
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, host="0.0.0.0", port=PORT)
+        site = web.TCPSite(runner, host=HOST, port=PORT)
         await site.start()
         
         logger.info(f"Bot started on port {PORT}")
