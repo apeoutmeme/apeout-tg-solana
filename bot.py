@@ -530,6 +530,10 @@ async def start_token_creation(message: types.Message):
 async def health_check(request):
     return web.Response(text="Bot is running!")
 
+async def webhook_debug(request):
+    """Handler for GET requests to webhook endpoint - for debugging only"""
+    return web.Response(text="Telegram webhook endpoint is working. Please use POST method for actual webhook requests.")
+
 async def main():
     try:
         # Register commands
@@ -542,6 +546,7 @@ async def main():
             types.BotCommand(command="stopschedule", description="Stop hourly buys: /stopschedule <address>"),
             types.BotCommand(command="removekey", description="Remove your private key"),
             types.BotCommand(command="createtoken", description="Create a new token: /createtoken"),
+            types.BotCommand(command="webhookinfo", description="Get webhook status information"),
         ])
         
         # Setup webhook
@@ -552,14 +557,36 @@ async def main():
         
         # Add routes
         app.router.add_get("/health", health_check)
+        app.router.add_get(WEBHOOK_PATH, webhook_debug)  # Debug endpoint
         
-        # Setup webhook handler
+        # Setup webhook handler for POST requests
         webhook_requests_handler = SimpleRequestHandler(
             dispatcher=dp,
             bot=bot,
-            secret_token=TELEGRAM_BOT_TOKEN  # You can set a secret token here
+            secret_token=TELEGRAM_BOT_TOKEN
         )
         webhook_requests_handler.register(app, path=WEBHOOK_PATH)
+        
+        # Add error middleware
+        @web.middleware
+        async def error_middleware(request, handler):
+            try:
+                return await handler(request)
+            except web.HTTPException as ex:
+                if ex.status == 405:
+                    return web.Response(
+                        text="Method not allowed. POST is required for webhook requests.",
+                        status=405
+                    )
+                raise
+            except Exception as e:
+                logger.error(f"Request error: {str(e)}")
+                return web.Response(
+                    text="Internal server error",
+                    status=500
+                )
+        
+        app.middlewares.append(error_middleware)
         
         # Setup application
         setup_application(app, dp, bot=bot)
@@ -573,19 +600,28 @@ async def main():
         # Ensure webhook is set
         webhook_info = await bot.get_webhook_info()
         if webhook_info.url != WEBHOOK_URL:
+            logger.info(f"Setting webhook URL to {WEBHOOK_URL}")
             await bot.set_webhook(
                 url=WEBHOOK_URL,
-                secret_token=TELEGRAM_BOT_TOKEN  # Same secret token as above
+                secret_token=TELEGRAM_BOT_TOKEN,
+                drop_pending_updates=True  # Optional: drop any pending updates
             )
-        
+            logger.info("Webhook set successfully")
+        else:
+            logger.info("Webhook URL already correct")
+            
         logger.info(f"Bot started on port {PORT}")
         logger.info(f"Webhook URL: {WEBHOOK_URL}")
+        
+        # Log current webhook info
+        current_webhook = await bot.get_webhook_info()
+        logger.info(f"Current webhook info: {current_webhook}")
         
         # Run forever
         await asyncio.Event().wait()
         
     except Exception as e:
-        logger.error(f"Main loop error: {e}")
+        logger.error(f"Main loop error: {str(e)}")
         raise
     
 
