@@ -559,11 +559,13 @@ async def main():
         app.router.add_get("/health", health_check)
         app.router.add_get(WEBHOOK_PATH, webhook_debug)  # Debug endpoint
         
+        # Generate a secure random string for webhook validation
+        WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', TELEGRAM_BOT_TOKEN)
+        
         # Setup webhook handler for POST requests
         webhook_requests_handler = SimpleRequestHandler(
             dispatcher=dp,
-            bot=bot,
-            secret_token=TELEGRAM_BOT_TOKEN
+            bot=bot
         )
         webhook_requests_handler.register(app, path=WEBHOOK_PATH)
         
@@ -571,13 +573,30 @@ async def main():
         @web.middleware
         async def error_middleware(request, handler):
             try:
-                return await handler(request)
+                # Log incoming request details
+                logger.info(f"Incoming request: {request.method} {request.path}")
+                logger.info(f"Headers: {dict(request.headers)}")
+                
+                if request.method == "POST" and request.path == WEBHOOK_PATH:
+                    try:
+                        body = await request.text()
+                        logger.info(f"Request body: {body[:200]}...")  # Log first 200 chars of body
+                    except Exception as e:
+                        logger.error(f"Error reading request body: {e}")
+                
+                response = await handler(request)
+                
+                # Log response details
+                logger.info(f"Response status: {response.status}")
+                return response
+                
             except web.HTTPException as ex:
                 if ex.status == 405:
                     return web.Response(
                         text="Method not allowed. POST is required for webhook requests.",
                         status=405
                     )
+                logger.error(f"HTTP Exception: {ex}")
                 raise
             except Exception as e:
                 logger.error(f"Request error: {str(e)}")
@@ -603,8 +622,8 @@ async def main():
             logger.info(f"Setting webhook URL to {WEBHOOK_URL}")
             await bot.set_webhook(
                 url=WEBHOOK_URL,
-                secret_token=TELEGRAM_BOT_TOKEN,
-                drop_pending_updates=True  # Optional: drop any pending updates
+                drop_pending_updates=True,  # Optional: drop any pending updates
+                allowed_updates=['message', 'callback_query']  # Specify which updates you want to receive
             )
             logger.info("Webhook set successfully")
         else:
