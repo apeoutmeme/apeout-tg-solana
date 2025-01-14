@@ -499,8 +499,8 @@ async def start_token_creation(message: types.Message):
                             telegram_url=user_data["telegram_url"],
                             website_url=user_data["website_url"],
                             image_path=temp_image_path,
-                            wallet_key=user_wallets[user_id],  # Pass single wallet key
-                            initial_buy=0.1  # Set reasonable initial buy amount in SOL
+                            wallet_keys=user_wallets[user_id],  # Pass single wallet key
+                            initial_buy=0.01  # Set reasonable initial buy amount in SOL
                         )
 
                         if result.get("success"):
