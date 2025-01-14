@@ -500,7 +500,7 @@ async def start_token_creation(message: types.Message):
                             website_url=user_data["website_url"],
                             image_path=temp_image_path,
                             wallet_keys=user_wallets[user_id],  # Pass single wallet key
-                            initial_buy=0.01  # Set reasonable initial buy amount in SOL
+                            initial_buys=initial_buys # Set reasonable initial buy amount in SOL
                         )
 
                         if result.get("success"):
