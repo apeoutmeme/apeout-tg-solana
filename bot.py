@@ -38,6 +38,8 @@ HOST = '0.0.0.0'  # Important for Render
 
 
 
+
+
 # Bot Configuration
 CHAT_ID = '-1002396701760'  # Your chat ID
 API_URL = "https://pumpportal.fun/api"
@@ -499,7 +501,7 @@ async def start_token_creation(message: types.Message):
                             telegram_url=user_data["telegram_url"],
                             website_url=user_data["website_url"],
                             image_path=temp_image_path,
-                            wallet_keys=user_wallets[user_id],  # Pass single wallet key
+                            wallet_keys=wallet_keys,  # Pass single wallet key
                             initial_buys=initial_buys # Set reasonable initial buy amount in SOL
                         )
 
