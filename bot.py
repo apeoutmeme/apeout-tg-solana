@@ -491,7 +491,7 @@ async def start_token_creation(message: types.Message):
                         
                         await message.reply("Creating your token... Please wait.")
                         
-                        create_token_bundle(
+                        result = await create_token_bundle(
                             token_name=user_data["token_name"],
                             token_symbol=user_data["token_symbol"],
                             description=user_data["description"],
@@ -499,20 +499,21 @@ async def start_token_creation(message: types.Message):
                             telegram_url=user_data["telegram_url"],
                             website_url=user_data["website_url"],
                             image_path=temp_image_path,
-                            wallet_keys=wallet_keys,
-                            initial_buys=initial_buys
+                            wallet_key=user_wallets[user_id],  # Pass single wallet key
+                            initial_buy=0.1  # Set reasonable initial buy amount in SOL
                         )
-                        
-                        # Clean up
-                     
-                        os.remove(temp_image_path)
-                        
-                        await message.reply(
-                            "✅ Token created successfully!\n"
-                            f"Name: {user_data['token_name']}\n"
-                            f"Symbol: {user_data['token_symbol']}"
-                        )
-                        
+
+                        if result.get("success"):
+                            await message.reply(
+                                "✅ Token created successfully!\n"
+                                f"Name: {user_data['token_name']}\n"
+                                f"Symbol: {user_data['token_symbol']}\n"
+                                f"Token Address: {result.get('token_address')}\n"
+                                f"Transaction: {result.get('transaction_url')}"
+                            )
+                        else:
+                            await message.reply(f"❌ Error creating token: {result.get('error', 'Unknown error')}")
+                                                
                     except Exception as e:
                         await message.reply(f"❌ Error creating token: {str(e)}")
                     
